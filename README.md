@@ -75,6 +75,15 @@ sudo systemctl status lestrajecten
 
 Komt "No such file or directory" terug, dan staat node ergens anders. Vind het juiste pad met `which node` en zet dat in `ExecStart=<pad>/node node_modules/next/dist/bin/next start -H 0.0.0.0`.
 
+**Belangrijk:** de service draait als `www-data`, dus na elke update (`git pull`, `npm install`, `npm run build`) moet het eigenaarschap teruggezet worden:
+
+```bash
+sudo chown -R www-data:www-data /opt/lestrajecten
+sudo systemctl restart lestrajecten
+```
+
+Zonder dit krijg je de fout `attempt to write a readonly database` bij het opslaan (SQLite heeft schrijfrechten nodig op de map én het databasebestand). Update in één keer met `sudo bash update.sh` (git pull, build, eigenaarschap en herstart).
+
 Zet daarna een reverse proxy (bijv. nginx of Caddy) met HTTPS voor de server.
 
 ## Eerste login
