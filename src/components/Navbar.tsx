@@ -51,6 +51,16 @@ export default function Navbar({ user }: { user: { name: string; role: string } 
               Beheer
             </Link>
           )}
+          <Link
+            href="/profiel"
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+              pathname.startsWith("/profiel")
+                ? "bg-indigo-50 text-indigo-700"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            Profiel
+          </Link>
         </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-sm text-slate-500">
