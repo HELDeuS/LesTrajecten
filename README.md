@@ -27,14 +27,14 @@ Webapplicatie voor het bouwen van complete lestrajecten op basis van kwalificati
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
-git clone https://github.com/HELDeuS/LesTrajecten.git
-cd LesTrajecten
-npm install
-cp .env.example .env
-# Vul MISTRAL_API_KEY en AUTH_SECRET (willekeurige string) in
-npx prisma db push
-npm run db:seed        # maakt admin-account aan (ADMIN_EMAIL / ADMIN_PASSWORD)
-npm run build
+# Installeer in /opt/lestrajecten (de locatie waar ook de systemd-unit naar verwijst)
+sudo mkdir -p /opt/lestrajecten
+sudo chown -R $USER:$USER /opt/lestrajecten
+cd /opt
+git clone https://github.com/HELDeuS/LesTrajecten.git lestrajecten
+cd /opt/lestrajecten
+bash setup.sh          # npm install, .env, database, seed en productie-build
+# Vul daarna MISTRAL_API_KEY en AUTH_SECRET in .env
 npm start              # draait op poort 3000
 ```
 
