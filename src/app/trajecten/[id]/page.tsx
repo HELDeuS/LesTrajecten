@@ -9,7 +9,13 @@ export default async function TrajectPage({ params }: { params: Promise<{ id: st
   const traject = await db.traject.findFirst({
     where: { id, ...(user.role === "ADMIN" ? {} : { ownerId: user.id }) },
     include: {
-      qualificationFile: { include: { goals: { where: { scope: "GENERAL" }, orderBy: { order: "asc" } } } },
+      goals: { where: { scope: "TRAJECT" }, orderBy: { order: "asc" } },
+      qualificationFile: {
+        include: {
+          goals: { where: { scope: "GENERAL" }, orderBy: { order: "asc" } },
+          kerntaken: { orderBy: { order: "asc" }, include: { werkprocessen: { orderBy: { order: "asc" } } } },
+        },
+      },
       modules: {
         orderBy: { order: "asc" },
         include: {

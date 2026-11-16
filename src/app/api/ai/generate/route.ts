@@ -19,6 +19,12 @@ export async function POST(req: NextRequest) {
       if (kind === "general-goals") {
         return await generateGeneralGoals(user.id, body);
       }
+      if (kind === "analyze-dossier") {
+        return await analyzeDossier(user.id, body);
+      }
+      if (kind === "traject-goals") {
+        return await generateTrajectGoals(user.id, body);
+      }
       if (kind === "module-goals") {
         return await generateModuleGoals(user.id, body);
       }
@@ -51,6 +57,103 @@ async function generateGeneralGoals(userId: number, body: { dossierId: number; c
   return NextResponse.json({ goals: result.goals ?? [] });
 }
 
+async function analyzeDossier(userId: number, body: { dossierId: number }) {
+  const dossier = await db.qualificationFile.findUnique({
+    where: { id: Number(body.dossierId) },
+    include: { kerntaken: { include: { werkprocessen: true } } },
+  });
+  if (!dossier) throw new AiError("Kwalificatiedossier niet gevonden.", 404);
+  const input = `Kwalificatiedossier: ${dossier.title}
+
+${dossier.content}`;
+  const result = await mistralJson<{
+    kerntaken: { code: string; title: string; description?: string; werkprocessen: { code: string; title: string; description?: string }[] }[];
+  }>(
+    NL_SYSTEM,
+    `Analyseer het onderstaande kwalificatiedossier en extraheer alle kerntaken met bijbehorende werkprocessen. Gebruik de officiële codes en formuleringen uit het dossier (bijv. kerntaak KT1 met werkprocessen 1.1, 1.2). Voeg geen kerntaken of werkprocessen toe die niet in het dossier staan.
+
+${input}
+
+` +
+      `Antwoord als JSON: {"kerntaken": [{"code": "...", "title": "...", "description": "...", "werkprocessen": [{"code": "...", "title": "...", "description": "..."}]}]}`
+  );
+  await db.kerntaak.deleteMany({ where: { qualificationFileId: dossier.id } });
+  const saved = [];
+  for (const [ki, kt] of (result.kerntaken ?? []).entries()) {
+    const kerntaak = await db.kerntaak.create({
+      data: {
+        qualificationFileId: dossier.id,
+        code: kt.code || `KT${ki + 1}`,
+        title: kt.title,
+        description: kt.description || null,
+        order: ki,
+      },
+    });
+    const wps = [];
+    for (const [wi, wp] of (kt.werkprocessen ?? []).entries()) {
+      wps.push(
+        await db.werkproces.create({
+          data: {
+            kerntaakId: kerntaak.id,
+            code: wp.code || `${ki + 1}.${wi + 1}`,
+            title: wp.title,
+            description: wp.description || null,
+            order: wi,
+          },
+        })
+      );
+    }
+    saved.push({ ...kerntaak, werkprocessen: wps });
+  }
+  await logGeneration(userId, "analyze-dossier", input, JSON.stringify(result));
+  return NextResponse.json({ kerntaken: saved });
+}
+
+async function generateTrajectGoals(
+  userId: number,
+  body: { trajectId: number; werkprocesIds: number[]; context?: string }
+) {
+  const traject = await db.traject.findUnique({
+    where: { id: Number(body.trajectId) },
+    include: {
+      qualificationFile: true,
+      modules: { orderBy: { order: "asc" } },
+    },
+  });
+  if (!traject) throw new AiError("Traject niet gevonden.", 404);
+  const werkprocessen = await db.werkproces.findMany({
+    where: { id: { in: (body.werkprocesIds || []).map(Number) } },
+    include: { kerntaak: true },
+  });
+  if (!werkprocessen.length) {
+    throw new AiError("Selecteer eerst minimaal één werkproces.", 400);
+  }
+  const wpText = werkprocessen
+    .map((wp) => `- [${wp.kerntaak.code}] ${wp.kerntaak.title} — werkproces ${wp.code}: ${wp.title}${wp.description ? ` (${wp.description})` : ""}`)
+    .join("\n");
+  const moduleText = traject.modules
+    .map((m, i) => `- Periode ${i + 1}: ${m.title} (${m.weeks} weken)`)
+    .join("\n");
+  const input = `Vak/traject: ${traject.title} (${traject.subject})
+Kwalificatiedossier: ${traject.qualificationFile?.title || "geen"}
+Gekozen kerntaken en werkprocessen:
+${wpText}
+Periodes:
+${moduleText || "nog geen periodes"}
+Extra context: ${body.context || "geen"}`;
+  const result = await mistralJson<{ goals: GoalItem[] }>(
+    NL_SYSTEM,
+    `Op basis van de gekozen kerntaken en werkprocessen stel je leerdoelen en leeruitkomsten op voor het COMPLETE traject (niet per periode). Dek alle gekozen werkprocessen af. Formuleer ze toetsbaar en concreet op mbo-niveau, met Bloom-niveau. Maximaal 15 doelen.
+
+${input}
+
+` +
+      `Antwoord als JSON: {"goals": [{"title": "...", "description": "...", "bloomLevel": "..."}]}`
+  );
+  await logGeneration(userId, "traject-goals", input, JSON.stringify(result));
+  return NextResponse.json({ goals: result.goals ?? [] });
+}
+
 async function generateModuleGoals(
   userId: number,
   body: { moduleId: number; subject: string; context?: string }
@@ -58,17 +161,33 @@ async function generateModuleGoals(
   const module = await db.module.findUnique({
     where: { id: Number(body.moduleId) },
     include: {
-      traject: { include: { qualificationFile: { include: { goals: { where: { scope: "GENERAL" } } } } } },
+      traject: {
+        include: {
+          goals: { where: { scope: "TRAJECT" }, orderBy: { order: "asc" } },
+          qualificationFile: { include: { goals: { where: { scope: "GENERAL" } } } },
+          modules: { orderBy: { order: "asc" } },
+        },
+      },
     },
   });
   if (!module) throw new AiError("Module niet gevonden.", 404);
-  const generalGoals =
-    module.traject.qualificationFile?.goals.map((g) => `- ${g.title}: ${g.description}`).join("\n") ||
-    "Geen algemene leerdoelen beschikbaar.";
-  const input = `Vak: ${module.traject.subject}\nModule: ${module.title}\n${module.description || ""}\nAlgemene leerdoelen:\n${generalGoals}\nExtra context: ${body.context || "geen"}`;
+  const trajectGoals = module.traject.goals;
+  const generalGoals = module.traject.qualificationFile?.goals ?? [];
+  const sourceGoals = trajectGoals.length ? trajectGoals : generalGoals;
+  if (!sourceGoals.length) {
+    throw new AiError(
+      "Er zijn nog geen trajectbrede leerdoelen. Genereer eerst leerdoelen voor het traject (of algemene doelen bij het dossier).",
+      400
+    );
+  }
+  const moduleIndex = module.traject.modules.findIndex((m) => m.id === module.id);
+  const goalText = sourceGoals
+    .map((g) => `- ${g.title}: ${g.description}${g.bloomLevel ? ` (Bloom: ${g.bloomLevel})` : ""}`)
+    .join("\n");
+  const input = `Vak: ${module.traject.subject}\nModule/periode ${moduleIndex + 1} van ${module.traject.modules.length}: ${module.title} (${module.weeks} weken)\n${module.description || ""}\nTrajectbrede leerdoelen:\n${goalText}\nExtra context: ${body.context || "geen"}`;
   const result = await mistralJson<{ goals: GoalItem[] }>(
     NL_SYSTEM,
-    `Verdiep de onderstaande algemene leerdoelen naar specifieke leerdoelen en leeruitkomsten voor dit vak en deze module. Maak ze concreet, toetsbaar en passend op mbo-niveau. Maximaal 10 doelen.\n\n${input}\n\n` +
+    `Verdeel de onderstaande trajectbrede leerdoelen over deze periode van het traject. Kies de doelen die logisch in deze periode thuishoren (rekening houdend met de positie van de periode in het traject), en werk ze uit naar concrete, toetsbare leerdoelen en leeruitkomsten voor deze periode. Bepaal zelf een passende complexiteit: beginperiodes starten met lagere Bloom-niveaus (kennen/begrijpen/toepassen), latere periodes werken toe op hogere niveaus (analyseren/evalueren/creëren) en integratie van eerdere periodes. Maximaal 10 doelen.\n\n${input}\n\n` +
       `Antwoord als JSON: {"goals": [{"title": "...", "description": "...", "bloomLevel": "..."}]}`
   );
   await logGeneration(userId, "module-goals", input, JSON.stringify(result));

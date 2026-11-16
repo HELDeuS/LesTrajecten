@@ -5,18 +5,19 @@ import { db } from "@/lib/db";
 export async function POST(req: NextRequest) {
   return withAuth(req, async () => {
     const body = await req.json();
-    const { scope, title, description, bloomLevel, qualificationFileId, moduleId, order } = body;
-    if (!title || !description || !(qualificationFileId || moduleId)) {
+    const { scope, title, description, bloomLevel, qualificationFileId, moduleId, trajectId, order } = body;
+    if (!title || !description || !(qualificationFileId || moduleId || trajectId)) {
       return NextResponse.json({ error: "Titel, beschrijving en doelbinding zijn verplicht." }, { status: 400 });
     }
     const goal = await db.learningGoal.create({
       data: {
-        scope: scope === "MODULE" ? "MODULE" : "GENERAL",
+        scope: scope === "MODULE" ? "MODULE" : scope === "TRAJECT" ? "TRAJECT" : "GENERAL",
         title,
         description,
         bloomLevel: bloomLevel || null,
         qualificationFileId: qualificationFileId || null,
         moduleId: moduleId || null,
+        trajectId: trajectId || null,
         order: order ?? 0,
       },
     });

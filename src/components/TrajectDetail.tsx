@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import TrajectGoals from "./TrajectGoals";
 
 type Goal = { id: number; title: string; description: string; bloomLevel: string | null; scope: string };
 type Module = {
@@ -40,7 +41,8 @@ type Traject = {
   periodEnd: string;
   lessonsPerWeek: number;
   lessonDurationMin: number;
-  qualificationFile: { title: string; goals: Goal[] } | null;
+  goals: Goal[];
+  qualificationFile: { title: string; goals: Goal[]; kerntaken: { id: number; code: string; title: string; werkprocessen: { id: number; code: string; title: string }[] }[] } | null;
   modules: Module[];
 };
 
@@ -49,6 +51,7 @@ const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("nl-NL") :
 export default function TrajectDetail({ traject }: { traject: Traject }) {
   const router = useRouter();
   const [modules, setModules] = useState(traject.modules);
+  const [trajectGoals, setTrajectGoals] = useState(traject.goals);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [newModule, setNewModule] = useState({ title: "", description: "", weeks: "6" });
@@ -57,6 +60,7 @@ export default function TrajectDetail({ traject }: { traject: Traject }) {
   const totalLessons = modules.reduce((s, m) => s + m.lessons.length, 0);
 
   const allGoals = [
+    ...trajectGoals.map((g) => ({ ...g, scope: "TRAJECT" })),
     ...(traject.qualificationFile?.goals.map((g) => ({ ...g, scope: "GENERAL" })) || []),
     ...modules.flatMap((m) => m.goals.map((g) => ({ ...g, scope: "MODULE" }))),
   ];
@@ -200,6 +204,13 @@ export default function TrajectDetail({ traject }: { traject: Traject }) {
 
       {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
+      <TrajectGoals
+        trajectId={traject.id}
+        kerntaken={traject.qualificationFile?.kerntaken || []}
+        initialGoals={trajectGoals}
+        onChange={(gs) => setTrajectGoals(gs.map((g) => ({ ...g, scope: "TRAJECT" })))}
+      />
+
       {modules.map((m, mi) => (
         <section key={m.id} className="card p-6 space-y-4">
           <div className="flex items-start justify-between gap-4">
@@ -218,7 +229,7 @@ export default function TrajectDetail({ traject }: { traject: Traject }) {
                   className="btn-primary text-xs px-2 py-1"
                   disabled={busy === `module-${m.id}`}
                 >
-                  {busy === `module-${m.id}` ? "AI genereert..." : "✨ AI leerdoelen"}
+                  {busy === `module-${m.id}` ? "AI verdeelt..." : "✨ AI verdeel doelen over periode"}
                 </button>
                 <button onClick={() => deleteModule(m.id)} className="btn-danger text-xs px-2 py-1">
                   Verwijder
@@ -411,7 +422,7 @@ function LessonCard({
                   <span>
                     {g.title}
                     <span className="badge bg-slate-100 text-slate-500 ml-1">
-                      {g.scope === "GENERAL" ? "algemeen" : "module"}
+                      {g.scope === "GENERAL" ? "algemeen" : g.scope === "TRAJECT" ? "traject" : "module"}
                     </span>
                   </span>
                 </label>

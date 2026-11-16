@@ -4,8 +4,11 @@ Webapplicatie voor het bouwen van complete lestrajecten op basis van kwalificati
 
 ## Functionaliteit
 
-- **Kwalificatiedossiers**: voeg de inhoud van een dossier toe (tekst), met CREBO-code en omschrijving.
+- **Kwalificatiedossiers**: voeg de volledige inhoud van een dossier toe (tekst), met CREBO-code en omschrijving.
+- **AI dossier-analyse**: AI extraheert kerntaken en werkprocessen uit het dossier.
 - **Algemene leerdoelen & uitkomsten**: genereer met AI (Bloom-taxonomie) of stel handmatig vast.
+- **Trajectdoelen met kerntaken-selectie**: kies per traject de relevante kerntaken/werkprocessen, laat AI leerdoelen en -uitkomsten voor het hele traject voorstellen, bewerk ze en sla ze op.
+- **Doelverdeling per periode**: AI verdeelt de trajectdoelen over de periodes en bepaalt de complexiteit (oplopende Bloom-niveaus); alles bewerkbaar.
 - **Lestrajecten**: het complete traject voor één vak over de hele opleiding; je geeft de opleidingsperiode (start/einde), lessen per week en lesduur op.
 - **Modules/periodes**: deel het traject op in periodes van X weken; lessen worden automatisch per module aangemaakt (weken × lessen/week) en over de periode ingepland met weeknummers en data.
 - **Specifieke leerdoelen**: verdiep algemene doelen per module en vak met AI.
