@@ -41,7 +41,22 @@ export async function mistralChat(system: string, user: string, jsonMode = true)
     throw new AiError(`Mistral API fout (${res.status}): ${text.slice(0, 300)}`, res.status);
   }
   const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "";
+  return normalizeContent(data.choices?.[0]?.message?.content);
+}
+
+function normalizeContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) =>
+        part && typeof part === "object" && "text" in part
+          ? String((part as { text: unknown }).text ?? "")
+          : String(part ?? "")
+      )
+      .join("");
+  }
+  if (content && typeof content === "object") return JSON.stringify(content);
+  return "";
 }
 
 export async function mistralJson<T>(system: string, user: string): Promise<T> {
@@ -51,7 +66,9 @@ export async function mistralJson<T>(system: string, user: string): Promise<T> {
   } catch {
     const match = raw.match(/\{[\s\S]*\}/);
     if (match) return JSON.parse(match[0]) as T;
-    throw new AiError("AI gaf een onverwacht antwoordformaat terug. Probeer het opnieuw.");
+    throw new AiError(
+      "AI gaf een onverwacht antwoordformaat terug. Probeer het opnieuw."
+    );
   }
 }
 
