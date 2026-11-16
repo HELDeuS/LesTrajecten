@@ -16,7 +16,9 @@ echo "==> Nieuwste versie ophalen..."
 sudo -u "$APP_USER" git pull 2>/dev/null || git pull
 
 echo "==> Dependencies en build (als app-gebruiker)..."
-if [ -d node_modules ]; then sudo -u "$APP_USER" npm install --omit=dev --no-audit --no-fund; fi
+# Volledige installatie incl. devDependencies: de productie-build heeft
+# tailwind, typescript en de prisma-cli nodig.
+sudo -u "$APP_USER" npm install --no-audit --no-fund
 sudo -u "$APP_USER" npm run build
 
 echo "==> Eigenaarschap herstellen naar $APP_USER..."
