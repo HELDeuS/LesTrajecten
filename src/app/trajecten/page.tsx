@@ -10,6 +10,7 @@ export default async function TrajectenPage() {
     include: {
       qualificationFile: { select: { title: true } },
       owner: { select: { name: true } },
+      modules: { select: { weeks: true } },
       _count: { select: { lessons: true, modules: true } },
     },
     orderBy: { updatedAt: "desc" },
@@ -45,11 +46,12 @@ export default async function TrajectenPage() {
               <span className="badge bg-indigo-50 text-indigo-700">{t._count.lessons} lessen</span>
             </div>
             <p className="text-sm text-slate-500 mt-2">
-              Periode: {fmt(t.periodStart)} – {fmt(t.periodEnd)} · {t.lessonDurationMin} min/les
+              Opleidingsperiode: {fmt(t.periodStart)} – {fmt(t.periodEnd)} · {t.lessonsPerWeek} lessen/week ·{" "}
+              {t.lessonDurationMin} min/les
             </p>
             <p className="text-xs text-slate-400 mt-2">
-              {t.qualificationFile ? `Dossier: ${t.qualificationFile.title}` : "Geen dossier gekoppeld"} ·{" "}
-              {t._count.modules} modules · {t.owner.name}
+              {t._count.modules} modules · {t.modules.reduce((s, m) => s + m.weeks, 0)} weken ·{" "}
+              {t.qualificationFile ? `Dossier: ${t.qualificationFile.title}` : "Geen dossier gekoppeld"} · {t.owner.name}
             </p>
           </Link>
         ))}

@@ -11,13 +11,13 @@ export async function POST(req: NextRequest) {
       cohort,
       periodStart,
       periodEnd,
-      numberOfLessons,
+      lessonsPerWeek,
       lessonDurationMin,
       qualificationFileId,
     } = body;
-    if (!title || !subject || !periodStart || !periodEnd || !numberOfLessons || !lessonDurationMin) {
+    if (!title || !subject || !periodStart || !periodEnd || !lessonsPerWeek || !lessonDurationMin) {
       return NextResponse.json(
-        { error: "Titel, vak, periode, aantal lessen en lesduur zijn verplicht." },
+        { error: "Titel, vak, periode, lessen per week en lesduur zijn verplicht." },
         { status: 400 }
       );
     }
@@ -26,8 +26,13 @@ export async function POST(req: NextRequest) {
     if (end < start) {
       return NextResponse.json({ error: "Einde van de periode ligt voor het begin." }, { status: 400 });
     }
-    if (numberOfLessons < 1 || numberOfLessons > 200) {
-      return NextResponse.json({ error: "Aantal lessen moet tussen 1 en 200 liggen." }, { status: 400 });
+    const lpw = Number(lessonsPerWeek);
+    const dur = Number(lessonDurationMin);
+    if (lpw < 1 || lpw > 7) {
+      return NextResponse.json({ error: "Lessen per week moet tussen 1 en 7 liggen." }, { status: 400 });
+    }
+    if (dur < 20 || dur > 480) {
+      return NextResponse.json({ error: "Lesduur moet tussen 20 en 480 minuten liggen." }, { status: 400 });
     }
     const traject = await db.traject.create({
       data: {
@@ -36,19 +41,11 @@ export async function POST(req: NextRequest) {
         cohort: cohort || null,
         periodStart: start,
         periodEnd: end,
-        numberOfLessons: Number(numberOfLessons),
-        lessonDurationMin: Number(lessonDurationMin),
+        lessonsPerWeek: lpw,
+        lessonDurationMin: dur,
         qualificationFileId: qualificationFileId ? Number(qualificationFileId) : null,
         ownerId: user.id,
-        lessons: {
-          create: Array.from({ length: Number(numberOfLessons) }, (_, i) => ({
-            number: i + 1,
-            title: `Les ${i + 1}`,
-            durationMin: Number(lessonDurationMin),
-          })),
-        },
       },
-      include: { lessons: true },
     });
     return NextResponse.json({ traject }, { status: 201 });
   });

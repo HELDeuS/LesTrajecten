@@ -5,15 +5,24 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type Goal = { id: number; title: string; description: string; bloomLevel: string | null; scope: string };
-type Module = { id: number; title: string; description: string | null; order: number; goals: Goal[] };
+type Module = {
+  id: number;
+  title: string;
+  description: string | null;
+  weeks: number;
+  order: number;
+  goals: Goal[];
+  lessons: Lesson[];
+};
 type Assignment = { id: number; title: string; description: string; type: string };
 type Lesson = {
   id: number;
   number: number;
+  numberInModule: number;
+  week: number;
   title: string;
   date: string | null;
   durationMin: number;
-  moduleId: number | null;
   introduction: string | null;
   activities: string | null;
   materials: string | null;
@@ -29,22 +38,23 @@ type Traject = {
   cohort: string | null;
   periodStart: string;
   periodEnd: string;
-  numberOfLessons: number;
+  lessonsPerWeek: number;
   lessonDurationMin: number;
   qualificationFile: { title: string; goals: Goal[] } | null;
   modules: Module[];
-  lessons: Lesson[];
 };
 
-const fmt = (d: string) => new Date(d).toLocaleDateString("nl-NL");
+const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("nl-NL") : "geen datum");
 
 export default function TrajectDetail({ traject }: { traject: Traject }) {
   const router = useRouter();
   const [modules, setModules] = useState(traject.modules);
-  const [lessons, setLessons] = useState(traject.lessons);
-  const [newModule, setNewModule] = useState({ title: "", description: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [newModule, setNewModule] = useState({ title: "", description: "", weeks: "6" });
+
+  const totalWeeks = modules.reduce((s, m) => s + m.weeks, 0);
+  const totalLessons = modules.reduce((s, m) => s + m.lessons.length, 0);
 
   const allGoals = [
     ...(traject.qualificationFile?.goals.map((g) => ({ ...g, scope: "GENERAL" })) || []),
@@ -62,25 +72,44 @@ export default function TrajectDetail({ traject }: { traject: Traject }) {
     return data;
   }
 
+  async function reload() {
+    const res = await fetch(`/api/trajects/${traject.id}`);
+    router.refresh();
+    if (res.ok) {
+      const data = await res.json();
+      setModules(data.traject.modules);
+    }
+  }
+
   async function addModule(e: React.FormEvent) {
     e.preventDefault();
     if (!newModule.title) return;
+    setError(null);
     try {
-      const data = await api("/api/modules", "POST", { trajectId: traject.id, ...newModule });
-      setModules((prev) => [...prev, { ...data.module, goals: [] }]);
-      setNewModule({ title: "", description: "" });
-      router.refresh();
+      await api("/api/modules", "POST", { trajectId: traject.id, ...newModule });
+      setNewModule({ title: "", description: "", weeks: "6" });
+      await reload();
     } catch (err) {
       setError((err as Error).message);
     }
   }
 
   async function deleteModule(id: number) {
+    setError(null);
     try {
       await api(`/api/modules?id=${id}`, "DELETE");
       setModules((prev) => prev.filter((m) => m.id !== id));
-      setLessons((prev) => prev.map((l) => (l.moduleId === id ? { ...l, moduleId: null } : l)));
-      router.refresh();
+      await reload();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function updateModule(id: number, patch: Record<string, unknown>) {
+    setError(null);
+    try {
+      await api("/api/modules", "PATCH", { id, ...patch });
+      await reload();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -95,20 +124,10 @@ export default function TrajectDetail({ traject }: { traject: Traject }) {
         moduleId,
         subject: traject.subject,
       });
-      const saved: Goal[] = [];
       for (const g of data.goals) {
-        const res = await api("/api/goals", "POST", {
-          scope: "MODULE",
-          moduleId,
-          ...g,
-          order: saved.length,
-        });
-        saved.push(res.goal);
+        await api("/api/goals", "POST", { scope: "MODULE", moduleId, ...g });
       }
-      setModules((prev) =>
-        prev.map((m) => (m.id === moduleId ? { ...m, goals: [...m.goals, ...saved] } : m))
-      );
-      router.refresh();
+      await reload();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -116,20 +135,9 @@ export default function TrajectDetail({ traject }: { traject: Traject }) {
     }
   }
 
-  async function updateLesson(lessonId: number, patch: Partial<Lesson> & { goalIds?: number[] }) {
-    const data = await api(`/api/lessons/${lessonId}`, "PATCH", patch);
-    setLessons((prev) =>
-      prev.map((l) =>
-        l.id === lessonId
-          ? {
-              ...l,
-              ...patch,
-              goals: (data.lesson.goals as { learningGoalId: number; learningGoal: Goal }[]) || l.goals,
-            }
-          : l
-      )
-    );
-    router.refresh();
+  async function updateLesson(lessonId: number, patch: Record<string, unknown>) {
+    await api(`/api/lessons/${lessonId}`, "PATCH", patch);
+    await reload();
   }
 
   async function generateLessonPlan(lesson: Lesson, goalIds: number[]) {
@@ -141,7 +149,8 @@ export default function TrajectDetail({ traject }: { traject: Traject }) {
         lessonId: lesson.id,
         goalIds,
       });
-      await updateLesson(lesson.id, { ...data.plan, aiGenerated: true });
+      const { title, introduction, activities, materials, assessment } = data.plan;
+      await updateLesson(lesson.id, { title, introduction, activities, materials, assessment });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -153,19 +162,11 @@ export default function TrajectDetail({ traject }: { traject: Traject }) {
     setBusy(`assignments-${lesson.id}`);
     setError(null);
     try {
-      const data = await api("/api/ai/generate", "POST", {
-        kind: "assignments",
-        lessonId: lesson.id,
-      });
-      const created: Assignment[] = [];
+      const data = await api("/api/ai/generate", "POST", { kind: "assignments", lessonId: lesson.id });
       for (const a of data.assignments) {
-        const res = await api("/api/assignments", "POST", { lessonId: lesson.id, ...a, aiGenerated: true });
-        created.push(res.assignment);
+        await api("/api/assignments", "POST", { lessonId: lesson.id, ...a, aiGenerated: true });
       }
-      setLessons((prev) =>
-        prev.map((l) => (l.id === lesson.id ? { ...l, assignments: [...l.assignments, ...created] } : l))
-      );
-      router.refresh();
+      await reload();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -175,10 +176,7 @@ export default function TrajectDetail({ traject }: { traject: Traject }) {
 
   async function deleteAssignment(lessonId: number, id: number) {
     await api(`/api/assignments?id=${id}`, "DELETE");
-    setLessons((prev) =>
-      prev.map((l) => (l.id === lessonId ? { ...l, assignments: l.assignments.filter((a) => a.id !== id) } : l))
-    );
-    router.refresh();
+    await reload();
   }
 
   return (
@@ -190,68 +188,118 @@ export default function TrajectDetail({ traject }: { traject: Traject }) {
         <h1 className="text-2xl font-bold mt-2">{traject.title}</h1>
         <p className="text-slate-500">
           {traject.subject}
-          {traject.cohort ? ` · ${traject.cohort}` : ""} · {traject.numberOfLessons} lessen ·{" "}
-          {fmt(traject.periodStart)} – {fmt(traject.periodEnd)} · {traject.lessonDurationMin} min/les
+          {traject.cohort ? ` · ${traject.cohort}` : ""} · {fmt(traject.periodStart)} – {fmt(traject.periodEnd)} ·{" "}
+          {traject.lessonsPerWeek} lessen/week · {traject.lessonDurationMin} min/les
           {traject.qualificationFile && ` · Dossier: ${traject.qualificationFile.title}`}
+        </p>
+        <p className="text-sm text-slate-600 mt-1">
+          <strong>{modules.length}</strong> modules · <strong>{totalWeeks}</strong> weken ·{" "}
+          <strong>{totalLessons}</strong> lessen
         </p>
       </div>
 
       {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
-      <section className="card p-6">
-        <h2 className="font-semibold text-lg mb-4">Modules</h2>
-        <ul className="space-y-4 mb-4">
-          {modules.length === 0 && <p className="text-sm text-slate-500">Nog geen modules.</p>}
-          {modules.map((m) => (
-            <li key={m.id} className="border border-slate-200 rounded-lg p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-medium">{m.title}</p>
-                  {m.description && <p className="text-sm text-slate-500">{m.description}</p>}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => generateModuleGoals(m.id)}
-                    className="btn-primary text-xs px-2 py-1"
-                    disabled={busy === `module-${m.id}`}
-                  >
-                    {busy === `module-${m.id}` ? "AI genereert..." : "✨ AI specifieke leerdoelen"}
-                  </button>
-                  <button onClick={() => deleteModule(m.id)} className="btn-danger text-xs px-2 py-1">
-                    Verwijder
-                  </button>
-                </div>
+      {modules.map((m, mi) => (
+        <section key={m.id} className="card p-6 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-indigo-600 uppercase">Periode {mi + 1}</p>
+              <h2 className="font-semibold text-lg">{m.title}</h2>
+              {m.description && <p className="text-sm text-slate-500">{m.description}</p>}
+              <p className="text-sm text-slate-600 mt-1">
+                {m.weeks} weken · {m.lessons.length} lessen · {m.goals.length} leerdoelen
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 items-end">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => generateModuleGoals(m.id)}
+                  className="btn-primary text-xs px-2 py-1"
+                  disabled={busy === `module-${m.id}`}
+                >
+                  {busy === `module-${m.id}` ? "AI genereert..." : "✨ AI leerdoelen"}
+                </button>
+                <button onClick={() => deleteModule(m.id)} className="btn-danger text-xs px-2 py-1">
+                  Verwijder
+                </button>
               </div>
-              {m.goals.length > 0 && (
-                <ul className="mt-3 space-y-1">
-                  {m.goals.map((g, i) => (
-                    <li key={g.id} className="text-sm text-slate-600 flex gap-2">
-                      <span className="text-indigo-500">◆</span>
-                      <span>
-                        <span className="font-medium">{g.title}</span>
-                        {g.bloomLevel && (
-                          <span className="badge bg-violet-50 text-violet-700 ml-1">{g.bloomLevel}</span>
-                        )}
-                        <span className="text-slate-500"> — {g.description}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ul>
-        <form onSubmit={addModule} className="flex gap-3 items-end border-t border-slate-100 pt-4">
-          <div className="flex-1">
-            <label className="label">Nieuwe module</label>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-slate-500">Weken:</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={52}
+                  defaultValue={m.weeks}
+                  onBlur={(e) => {
+                    const v = Number(e.target.value);
+                    if (v !== m.weeks && v >= 1) updateModule(m.id, { weeks: v });
+                  }}
+                  className="input w-20 px-2 py-1 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          {m.goals.length > 0 && (
+            <details className="border border-slate-200 rounded-lg p-3">
+              <summary className="text-sm font-medium cursor-pointer">Leerdoelen ({m.goals.length})</summary>
+              <ul className="mt-2 space-y-1">
+                {m.goals.map((g) => (
+                  <li key={g.id} className="text-sm text-slate-600 flex gap-2">
+                    <span className="text-indigo-500">◆</span>
+                    <span>
+                      <span className="font-medium">{g.title}</span>
+                      {g.bloomLevel && <span className="badge bg-violet-50 text-violet-700 ml-1">{g.bloomLevel}</span>}
+                      <span className="text-slate-500"> — {g.description}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
+          <div className="space-y-3">
+            {m.lessons.map((lesson) => (
+              <LessonCard
+                key={lesson.id}
+                lesson={lesson}
+                allGoals={allGoals}
+                busy={busy}
+                onSave={updateLesson}
+                onGeneratePlan={generateLessonPlan}
+                onGenerateAssignments={generateAssignments}
+                onDeleteAssignment={deleteAssignment}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+
+      <form onSubmit={addModule} className="card p-6">
+        <h2 className="font-semibold text-lg mb-4">Nieuwe module/periode toevoegen</h2>
+        <div className="grid md:grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="label">Titel</label>
             <input
               className="input"
-              placeholder="bijv. Module 1: Basis programmeren"
+              placeholder="bijv. Periode 1: Linux basis"
               value={newModule.title}
               onChange={(e) => setNewModule({ ...newModule, title: e.target.value })}
             />
           </div>
-          <div className="flex-[2]">
+          <div>
+            <label className="label">Aantal weken</label>
+            <input
+              type="number"
+              min={1}
+              max={52}
+              className="input"
+              value={newModule.weeks}
+              onChange={(e) => setNewModule({ ...newModule, weeks: e.target.value })}
+            />
+          </div>
+          <div>
             <label className="label">Omschrijving (optioneel)</label>
             <input
               className="input"
@@ -259,35 +307,21 @@ export default function TrajectDetail({ traject }: { traject: Traject }) {
               onChange={(e) => setNewModule({ ...newModule, description: e.target.value })}
             />
           </div>
-          <button type="submit" className="btn-secondary">
-            Toevoegen
-          </button>
-        </form>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="font-semibold text-lg">Lessen ({lessons.length})</h2>
-        {lessons.map((lesson) => (
-          <LessonCard
-            key={lesson.id}
-            lesson={lesson}
-            modules={modules}
-            allGoals={allGoals}
-            busy={busy}
-            onSave={updateLesson}
-            onGeneratePlan={generateLessonPlan}
-            onGenerateAssignments={generateAssignments}
-            onDeleteAssignment={deleteAssignment}
-          />
-        ))}
-      </section>
+        </div>
+        <button type="submit" className="btn-primary mt-4">
+          Module toevoegen
+        </button>
+        <p className="text-xs text-slate-400 mt-2">
+          Lessen worden automatisch aangemaakt (weken × {traject.lessonsPerWeek} lessen/week) en over de periode
+          ingepland vanaf de startdatum.
+        </p>
+      </form>
     </div>
   );
 }
 
 function LessonCard({
   lesson,
-  modules,
   allGoals,
   busy,
   onSave,
@@ -296,10 +330,9 @@ function LessonCard({
   onDeleteAssignment,
 }: {
   lesson: Lesson;
-  modules: Module[];
   allGoals: (Goal & { scope: string })[];
   busy: string | null;
-  onSave: (id: number, patch: Partial<Lesson> & { goalIds?: number[] }) => Promise<void>;
+  onSave: (id: number, patch: Record<string, unknown>) => Promise<void>;
   onGeneratePlan: (lesson: Lesson, goalIds: number[]) => Promise<void>;
   onGenerateAssignments: (lesson: Lesson) => Promise<void>;
   onDeleteAssignment: (lessonId: number, id: number) => Promise<void>;
@@ -307,7 +340,6 @@ function LessonCard({
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(lesson.title);
   const [date, setDate] = useState(lesson.date ? lesson.date.slice(0, 10) : "");
-  const [moduleId, setModuleId] = useState(lesson.moduleId ? String(lesson.moduleId) : "");
   const [introduction, setIntroduction] = useState(lesson.introduction || "");
   const [activities, setActivities] = useState(lesson.activities || "");
   const [materials, setMaterials] = useState(lesson.materials || "");
@@ -324,7 +356,6 @@ function LessonCard({
     await onSave(lesson.id, {
       title,
       date: date || null,
-      moduleId: moduleId ? Number(moduleId) : null,
       introduction,
       activities,
       materials,
@@ -335,27 +366,26 @@ function LessonCard({
   }
 
   return (
-    <div className="card">
+    <div className="border border-slate-200 rounded-lg">
       <button
-        className="w-full flex items-center justify-between p-4 text-left"
+        className="w-full flex items-center justify-between p-3 text-left"
         onClick={() => setOpen(!open)}
       >
         <div>
-          <p className="font-medium">
-            Les {lesson.number}: {lesson.title}
+          <p className="font-medium text-sm">
+            Les {lesson.number} ({lesson.numberInModule} in periode): {lesson.title}
             {lesson.aiGenerated && <span className="badge bg-emerald-50 text-emerald-700 ml-2">AI</span>}
           </p>
           <p className="text-xs text-slate-400">
-            {lesson.date ? fmt(lesson.date) : "geen datum"} · {lesson.durationMin} min ·{" "}
-            {modules.find((m) => m.id === lesson.moduleId)?.title || "geen module"} ·{" "}
-            {lesson.goals.length} leerdoelen · {lesson.assignments.length} opdrachten
+            Week {lesson.week} · {fmt(lesson.date)} · {lesson.durationMin} min · {lesson.goals.length} leerdoelen ·{" "}
+            {lesson.assignments.length} opdrachten
           </p>
         </div>
         <span className="text-slate-400">{open ? "▾" : "▸"}</span>
       </button>
       {open && (
         <div className="border-t border-slate-100 p-4 space-y-4">
-          <div className="grid md:grid-cols-3 gap-3">
+          <div className="grid md:grid-cols-2 gap-3">
             <div>
               <label className="label">Titel</label>
               <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -363,17 +393,6 @@ function LessonCard({
             <div>
               <label className="label">Datum</label>
               <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Module</label>
-              <select className="input" value={moduleId} onChange={(e) => setModuleId(e.target.value)}>
-                <option value="">— geen —</option>
-                {modules.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.title}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
 

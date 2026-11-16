@@ -83,7 +83,7 @@ async function generateLessonPlan(
     where: { id: Number(body.lessonId) },
     include: {
       traject: true,
-      module: true,
+      module: { include: { _count: { select: { lessons: true } } } },
       goals: { include: { learningGoal: true } },
     },
   });
@@ -95,7 +95,7 @@ async function generateLessonPlan(
   const goalText =
     goals.map((g) => `- ${g.title}: ${g.description}${g.bloomLevel ? ` (Bloom: ${g.bloomLevel})` : ""}`).join("\n") ||
     "Geen leerdoelen gekoppeld.";
-  const input = `Traject: ${lesson.traject.title} (vak: ${lesson.traject.subject})\nLes ${lesson.number} van ${lesson.traject.numberOfLessons}, duur ${lesson.durationMin} minuten\nModule: ${lesson.module?.title || "geen"}\nLeerdoelen:\n${goalText}\nExtra context: ${body.context || "geen"}`;
+  const input = `Traject: ${lesson.traject.title} (vak: ${lesson.traject.subject})\nLes ${lesson.numberInModule} van ${lesson.module._count.lessons} in module "${lesson.module.title}", week ${lesson.week} van het traject, duur ${lesson.durationMin} minuten\nLeerdoelen:\n${goalText}\nExtra context: ${body.context || "geen"}`;
   const result = await mistralJson<{
     title: string;
     introduction: string;

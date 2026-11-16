@@ -66,7 +66,7 @@ model Traject {
   cohort              String?
   periodStart         DateTime
   periodEnd           DateTime
-  numberOfLessons     Int
+  lessonsPerWeek      Int                @default(2)
   lessonDurationMin   Int
   qualificationFileId Int?
   qualificationFile   QualificationFile? @relation(fields: [qualificationFileId], references: [id])
@@ -84,6 +84,7 @@ model Module {
   traject     Traject        @relation(fields: [trajectId], references: [id], onDelete: Cascade)
   title       String
   description String?
+  weeks       Int            @default(6)
   order       Int            @default(0)
   goals       LearningGoal[]
   lessons     Lesson[]
@@ -93,15 +94,17 @@ model Lesson {
   id               Int           @id @default(autoincrement())
   trajectId        Int
   traject          Traject       @relation(fields: [trajectId], references: [id], onDelete: Cascade)
-  moduleId         Int?
-  module           Module?       @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  moduleId         Int
+  module           Module        @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   number           Int
+  numberInModule   Int           @default(0)
+  week             Int           @default(1)
   title            String
   date             DateTime?
   durationMin      Int
   introduction     String?
   activities       String?
-  materials        String?
+  materials       String?
   assessment       String?
   aiGenerated      Boolean       @default(false)
   goals            LessonGoal[]

@@ -19,7 +19,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         ...(body.title !== undefined && { title: body.title }),
         ...(body.date !== undefined && { date: body.date ? new Date(body.date) : null }),
         ...(body.durationMin !== undefined && { durationMin: Number(body.durationMin) }),
-        ...(body.moduleId !== undefined && { moduleId: body.moduleId ? Number(body.moduleId) : null }),
         ...(body.introduction !== undefined && { introduction: body.introduction }),
         ...(body.activities !== undefined && { activities: body.activities }),
         ...(body.materials !== undefined && { materials: body.materials }),

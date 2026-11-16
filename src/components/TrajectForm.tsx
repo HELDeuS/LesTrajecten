@@ -12,7 +12,7 @@ export default function TrajectForm({ dossiers }: { dossiers: { id: number; titl
     cohort: "",
     periodStart: "",
     periodEnd: "",
-    numberOfLessons: "12",
+    lessonsPerWeek: "2",
     lessonDurationMin: "90",
     qualificationFileId: "",
   });
@@ -52,14 +52,18 @@ export default function TrajectForm({ dossiers }: { dossiers: { id: number; titl
   return (
     <form onSubmit={handleSubmit} className="card p-6 space-y-4">
       <h2 className="font-semibold text-lg">Nieuw lestraject</h2>
+      <p className="text-sm text-slate-500 -mt-2">
+        Een lestraject dekt de hele opleiding voor één vak. Deel het daarna op in modules/periodes (weken); de lessen
+        worden per module automatisch ingepland.
+      </p>
       <div className="grid md:grid-cols-2 gap-4">
         <div>
           <label className="label">Titel</label>
-          <input className="input" value={form.title} onChange={(e) => set("title", e.target.value)} required placeholder="bijv. Programmeren met Python" />
+          <input className="input" value={form.title} onChange={(e) => set("title", e.target.value)} required placeholder="bijv. Linux" />
         </div>
         <div>
           <label className="label">Vak / onderwerp</label>
-          <input className="input" value={form.subject} onChange={(e) => set("subject", e.target.value)} required placeholder="bijv. Informatica" />
+          <input className="input" value={form.subject} onChange={(e) => set("subject", e.target.value)} required placeholder="bijv. Linux" />
         </div>
         <div>
           <label className="label">Cohort / groep (optioneel)</label>
@@ -77,16 +81,16 @@ export default function TrajectForm({ dossiers }: { dossiers: { id: number; titl
           </select>
         </div>
         <div>
-          <label className="label">Periode start</label>
+          <label className="label">Start opleidingsperiode</label>
           <input type="date" className="input" value={form.periodStart} onChange={(e) => set("periodStart", e.target.value)} required />
         </div>
         <div>
-          <label className="label">Periode einde</label>
+          <label className="label">Einde opleidingsperiode</label>
           <input type="date" className="input" value={form.periodEnd} onChange={(e) => set("periodEnd", e.target.value)} required />
         </div>
         <div>
-          <label className="label">Aantal lessen</label>
-          <input type="number" min={1} max={200} className="input" value={form.numberOfLessons} onChange={(e) => set("numberOfLessons", e.target.value)} required />
+          <label className="label">Lessen per week</label>
+          <input type="number" min={1} max={7} className="input" value={form.lessonsPerWeek} onChange={(e) => set("lessonsPerWeek", e.target.value)} required />
         </div>
         <div>
           <label className="label">Lesduur (minuten)</label>

@@ -13,7 +13,11 @@ export default async function Dashboard() {
     db.learningGoal.count({ where: { scope: "GENERAL" } }),
     db.traject.findMany({
       where: user.role === "ADMIN" ? {} : { ownerId: user.id },
-      include: { qualificationFile: { select: { title: true } }, _count: { select: { lessons: true, modules: true } } },
+      include: {
+        qualificationFile: { select: { title: true } },
+        modules: { select: { weeks: true } },
+        _count: { select: { lessons: true, modules: true } },
+      },
       orderBy: { updatedAt: "desc" },
       take: 5,
     }),
@@ -60,7 +64,8 @@ export default async function Dashboard() {
                   <div>
                     <p className="font-medium">{t.title}</p>
                     <p className="text-sm text-slate-500">
-                      {t.subject} · {t.numberOfLessons} lessen · {t.periodStart.toLocaleDateString("nl-NL")} –{" "}
+                      {t.subject} · {t._count.modules} modules · {t.modules.reduce((s, m) => s + m.weeks, 0)} weken ·{" "}
+                      {t._count.lessons} lessen · {t.periodStart.toLocaleDateString("nl-NL")} –{" "}
                       {t.periodEnd.toLocaleDateString("nl-NL")}
                     </p>
                   </div>

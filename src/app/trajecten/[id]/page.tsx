@@ -10,8 +10,13 @@ export default async function TrajectPage({ params }: { params: Promise<{ id: st
     where: { id, ...(user.role === "ADMIN" ? {} : { ownerId: user.id }) },
     include: {
       qualificationFile: { include: { goals: { where: { scope: "GENERAL" }, orderBy: { order: "asc" } } } },
-      modules: { include: { goals: { orderBy: { order: "asc" } } }, orderBy: { order: "asc" } },
-      lessons: { include: { goals: { include: { learningGoal: true } }, assignments: true }, orderBy: { number: "asc" } },
+      modules: {
+        orderBy: { order: "asc" },
+        include: {
+          goals: { orderBy: { order: "asc" } },
+          lessons: { orderBy: { numberInModule: "asc" }, include: { goals: { include: { learningGoal: true } }, assignments: true } },
+        },
+      },
     },
   });
   if (!traject) notFound();
