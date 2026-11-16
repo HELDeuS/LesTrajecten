@@ -12,6 +12,8 @@ export default function DossierForm() {
   const [content, setContent] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadInfo, setUploadInfo] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,6 +36,36 @@ export default function DossierForm() {
     setContent("");
     setOpen(false);
     router.refresh();
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setUploadInfo(null);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/dossiers/extract-pdf", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "PDF-extractie mislukt.");
+        return;
+      }
+      setContent(data.content);
+      if (!title) {
+        setTitle(file.name.replace(/\.pdf$/i, ""));
+      }
+      setUploadInfo(
+        `Geëxtraheerd uit ${file.name} (${Math.round(file.size / 1024)} kB). Controleer de inhoud hieronder en pas aan waar nodig.`
+      );
+    } catch {
+      setError("Het uploaden of extraheren mislukte. Probeer het opnieuw.");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
   }
 
   if (!open) {
@@ -63,12 +95,20 @@ export default function DossierForm() {
       </div>
       <div>
         <label className="label">Inhoud van het dossier</label>
+        <div className="flex flex-wrap gap-2 mb-2">
+          <label className="btn-secondary cursor-pointer">
+            {uploading ? "AI extraheert tekst..." : "📄 Pdf uploaden (AI-extractie)"}
+            <input type="file" accept="application/pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
+          </label>
+          <span className="text-xs text-slate-400 self-center">of plak hieronder de tekst handmatig</span>
+        </div>
+        {uploadInfo && <p className="text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 mb-2">{uploadInfo}</p>}
         <textarea
           className="input min-h-40"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           required
-          placeholder="Plak hier de relevante tekst uit het kwalificatiedossier (kerntaken, werkprocessen, beroepshouding, etc.)"
+          placeholder="Upload een pdf of plak hier de relevante tekst uit het kwalificatiedossier (kerntaken, werkprocessen, beroepshouding, etc.)"
         />
       </div>
       {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}

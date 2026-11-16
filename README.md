@@ -4,7 +4,7 @@ Webapplicatie voor het bouwen van complete lestrajecten op basis van kwalificati
 
 ## Functionaliteit
 
-- **Kwalificatiedossiers**: voeg de volledige inhoud van een dossier toe (tekst), met CREBO-code en omschrijving.
+- **Kwalificatiedossiers**: upload de SBB-pdf en laat Mistral OCR de tekst extraheren (of plak handmatig), met CREBO-code en omschrijving.
 - **AI dossier-analyse**: AI extraheert kerntaken en werkprocessen uit het dossier.
 - **Algemene leerdoelen & uitkomsten**: genereer met AI (Bloom-taxonomie) of stel handmatig vast.
 - **Trajectdoelen met kerntaken-selectie**: kies per traject de relevante kerntaken/werkprocessen, laat AI leerdoelen en -uitkomsten voor het hele traject voorstellen, bewerk ze en sla ze op.
