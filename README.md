@@ -49,18 +49,27 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/lestrajecten
-ExecStart=/usr/bin/npm start
-Restart=always
-User=www-data
+# Start direct via node (npm werkt niet als www-data / pad verschilt per installatie)
+ExecStart=/usr/bin/env node node_modules/next/dist/bin/next start -H 0.0.0.0
+Environment=NODE_ENV=production
 EnvironmentFile=/opt/lestrajecten/.env
+Restart=always
+RestartSec=5
+User=www-data
 
 [Install]
 WantedBy=multi-user.target
 ```
 
 ```bash
+# Node moet voor www-data bereikbaar zijn; check zo nodig het pad met: which node
+sudo chown -R www-data:www-data /opt/lestrajecten
+sudo systemctl daemon-reload
 sudo systemctl enable --now lestrajecten
+sudo systemctl status lestrajecten
 ```
+
+Komt "No such file or directory" terug, dan staat node ergens anders. Vind het juiste pad met `which node` en zet dat in `ExecStart=<pad>/node node_modules/next/dist/bin/next start -H 0.0.0.0`.
 
 Zet daarna een reverse proxy (bijv. nginx of Caddy) met HTTPS voor de server.
 
