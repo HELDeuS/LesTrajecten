@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./data.db"
+}
+
+enum Role {
+  ADMIN
+  DOCENT
+}
+
+enum GoalScope {
+  GENERAL
+  MODULE
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(DOCENT)
+  qualificationFiles QualificationFile[]
+  trajects     Traject[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model QualificationFile {
+  id          Int           @id @default(autoincrement())
+  title       String
+  creboCode   String?
+  description String?
+  content     String
+  ownerId     Int
+  owner       User          @relation(fields: [ownerId], references: [id])
+  goals       LearningGoal[]
+  trajects    Traject[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model LearningGoal {
+  id                  Int                @id @default(autoincrement())
+  scope               GoalScope
+  title               String
+  description         String
+  bloomLevel          String?
+  order               Int                @default(0)
+  qualificationFileId Int?
+  qualificationFile   QualificationFile? @relation(fields: [qualificationFileId], references: [id], onDelete: Cascade)
+  moduleId            Int?
+  module              Module?            @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  lessons             LessonGoal[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model Traject {
+  id                  Int                @id @default(autoincrement())
+  title               String
+  subject             String
+  cohort              String?
+  periodStart         DateTime
+  periodEnd           DateTime
+  numberOfLessons     Int
+  lessonDurationMin   Int
+  qualificationFileId Int?
+  qualificationFile   QualificationFile? @relation(fields: [qualificationFileId], references: [id])
+  ownerId             Int
+  owner               User               @relation(fields: [ownerId], references: [id])
+  modules             Module[]
+  lessons             Lesson[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model Module {
+  id          Int            @id @default(autoincrement())
+  trajectId   Int
+  traject     Traject        @relation(fields: [trajectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  order       Int            @default(0)
+  goals       LearningGoal[]
+  lessons     Lesson[]
+}
+
+model Lesson {
+  id               Int           @id @default(autoincrement())
+  trajectId        Int
+  traject          Traject       @relation(fields: [trajectId], references: [id], onDelete: Cascade)
+  moduleId         Int?
+  module           Module?       @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  number           Int
+  title            String
+  date             DateTime?
+  durationMin      Int
+  introduction     String?
+  activities       String?
+  materials        String?
+  assessment       String?
+  aiGenerated      Boolean       @default(false)
+  goals            LessonGoal[]
+  assignments      Assignment[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+model LessonGoal {
+  id          Int    @id @default(autoincrement())
+  lessonId    Int
+  lesson      Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  learningGoalId Int
+  learningGoal LearningGoal @relation(fields: [learningGoalId], references: [id], onDelete: Cascade)
+}
+
+model Assignment {
+  id          Int    @id @default(autoincrement())
+  lessonId    Int
+  lesson      Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  type        String @default("opdracht")
+  aiGenerated Boolean @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model AiGeneration {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  kind      String
+  input     String
+  output    String
+  createdAt DateTime @default(now())
+}
