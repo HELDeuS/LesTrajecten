@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api";
 import { db } from "@/lib/db";
-import { AiError, mistralJson } from "@/lib/ai";
+import { AiError, aiJson } from "@/lib/ai";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withAuth(req, async ({ user }) => {
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       lesson.goals.map((lg) => `- ${lg.learningGoal.title}: ${lg.learningGoal.description}`).join("\n") ||
       "Geen leerdoelen gekoppeld.";
     const input = `Les: ${lesson.title}\nVak: ${lesson.traject.subject}\nLeerdoelen:\n${goalText}\n\nInleiding: ${lesson.introduction || "geen"}\nActiviteiten: ${lesson.activities || "geen"}`;
-    const outline = await mistralJson<{ slides: { title: string; bullets: string[] }[] }>(
+    const outline = await aiJson<{ slides: { title: string; bullets: string[] }[] }>(
       "Je bent expert in onderwijs en presentaties. Antwoord in het Nederlands met geldige JSON.",
       `Maak een presentatie-outline voor de volgende les. Maximaal 10 slides, per slide maximaal 5 korte bullets.\n\n${input}\n\n` +
         `Antwoord als JSON: {"slides": [{"title": "...", "bullets": ["...", "..."]}]}`

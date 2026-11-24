@@ -1,10 +1,10 @@
 # LesTrajecten
 
-Webapplicatie voor het bouwen van complete lestrajecten op basis van kwalificatiedossiers, met AI-ondersteuning (Mistral AI). Geschikt voor meerdere docenten op een Ubuntu-server.
+Webapplicatie voor het bouwen van complete lestrajecten op basis van kwalificatiedossiers, met AI-ondersteuning. De AI-laag is provider-onafhankelijk: elke OpenAI-compatibele API werkt (Mistral, of een private server met vLLM/llama.cpp/Ollama/LM Studio). Geschikt voor meerdere docenten op een Ubuntu-server.
 
 ## Functionaliteit
 
-- **Kwalificatiedossiers**: upload de SBB-pdf en laat Mistral OCR de tekst extraheren (of plak handmatig), met CREBO-code en omschrijving.
+- **Kwalificatiedossiers**: upload de SBB-pdf en laat de tekst extraheren (Mistral OCR of lokaal), of plak handmatig; met CREBO-code en omschrijving.
 - **AI dossier-analyse**: AI extraheert kerntaken en werkprocessen uit het dossier.
 - **Algemene leerdoelen & uitkomsten**: genereer met AI (Bloom-taxonomie) of stel handmatig vast.
 - **Trajectdoelen met kerntaken-selectie**: kies per traject de relevante kerntaken/werkprocessen, laat AI leerdoelen en -uitkomsten voor het hele traject voorstellen, bewerk ze en sla ze op.
@@ -17,12 +17,25 @@ Webapplicatie voor het bouwen van complete lestrajecten op basis van kwalificati
 - **PowerPoint**: download per les een gegenereerde .pptx-presentatie.
 - **Gebruikersbeheer**: login met rollen (beheerder/docent); beheerders maken accounts aan. Beheerders zien alles, docenten hun eigen materiaal.
 
+## AI-provider configureren
+
+Stel in `.env` in (elke OpenAI-compatibele endpoint):
+
+```bash
+AI_BASE_URL=http://mijnserver:8000/v1   # of https://api.mistral.ai/v1
+AI_API_KEY=supergeheim                   # private servers: waarde vaak vrij te kiezen
+AI_MODEL=llama3.1:8b                    # modelnaam zoals de server die kent
+# AI_JSON_MODE=off                      # alleen als de server response_format niet ondersteunt
+```
+
+Pdf-extractie: `AI_PDF_EXTRACT=mistral` (OCR via Mistral, ook voor gescande pdf's) of `local` (tekst-extractie op de eigen server, geen API-sleutel nodig). Oudere `MISTRAL_API_KEY`/`MISTRAL_MODEL`-configuratie blijft werken.
+
 ## Techniek
 
 - Next.js 15 (App Router) + React + Tailwind CSS 4
 - Prisma + SQLite (eenvoudig up te graden naar PostgreSQL)
 - Authenticatie: e-mail/wachtwoord met bcrypt en JWT-sessiecookie (jose)
-- AI: Mistral AI Chat API (`MISTRAL_API_KEY`)
+- AI: provider-onafhankelijke laag (OpenAI-compatibel: `AI_BASE_URL`/`AI_API_KEY`/`AI_MODEL`)
 
 ## Installatie (Ubuntu)
 

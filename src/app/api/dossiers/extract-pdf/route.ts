@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api";
-import { AiError, mistralOcrPdf } from "@/lib/ai";
+import { AiError, aiOcrPdf } from "@/lib/ai";
 import { logGeneration } from "@/lib/ai";
 
 const MAX_PDF_BYTES = 50 * 1024 * 1024;
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
       const content = await Promise.race([
-        mistralOcrPdf(buffer),
+        aiOcrPdf(buffer),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new AiError("De OCR-extractie duurde te lang. Probeer het opnieuw.")), OCR_TIMEOUT_MS)
         ),

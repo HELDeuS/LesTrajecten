@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api";
 import { db } from "@/lib/db";
-import { AiError, logGeneration, mistralJson } from "@/lib/ai";
+import { AiError, logGeneration, aiJson } from "@/lib/ai";
 
 type GoalItem = { title: string; description: string; bloomLevel?: string };
 
@@ -48,7 +48,7 @@ async function generateGeneralGoals(userId: number, body: { dossierId: number; c
   const dossier = await db.qualificationFile.findUnique({ where: { id: Number(body.dossierId) } });
   if (!dossier) throw new AiError("Kwalificatiedossier niet gevonden.", 404);
   const input = `Kwalificatiedossier: ${dossier.title}\n\n${dossier.content}\n\nExtra context: ${body.context || "geen"}`;
-  const result = await mistralJson<{ goals: GoalItem[] }>(
+  const result = await aiJson<{ goals: GoalItem[] }>(
     NL_SYSTEM,
     `Analyseer het onderstaande kwalificatiedossier en stel algemene leerdoelen en leeruitkomsten op op niveau 2 (kerndoelen/vakdoelen). Gebruik Bloom-taxonomie voor het niveau. Maximaal 12 doelen.\n\n${input}\n\n` +
       `Antwoord als JSON: {"goals": [{"title": "...", "description": "...", "bloomLevel": "..."}]}`
@@ -66,7 +66,7 @@ async function analyzeDossier(userId: number, body: { dossierId: number }) {
   const input = `Kwalificatiedossier: ${dossier.title}
 
 ${dossier.content}`;
-  const result = await mistralJson<{
+  const result = await aiJson<{
     kerntaken: { code: string; title: string; description?: string; werkprocessen: { code: string; title: string; description?: string }[] }[];
   }>(
     NL_SYSTEM,
@@ -141,7 +141,7 @@ ${wpText}
 Periodes:
 ${moduleText || "nog geen periodes"}
 Extra context: ${body.context || "geen"}`;
-  const result = await mistralJson<{ goals: GoalItem[] }>(
+  const result = await aiJson<{ goals: GoalItem[] }>(
     NL_SYSTEM,
     `Op basis van de gekozen kerntaken en werkprocessen stel je leerdoelen en leeruitkomsten op voor het COMPLETE traject (niet per periode). Dek alle gekozen werkprocessen af. Formuleer ze toetsbaar en concreet op mbo-niveau, met Bloom-niveau. Maximaal 15 doelen.
 
@@ -185,7 +185,7 @@ async function generateModuleGoals(
     .map((g) => `- ${g.title}: ${g.description}${g.bloomLevel ? ` (Bloom: ${g.bloomLevel})` : ""}`)
     .join("\n");
   const input = `Vak: ${module.traject.subject}\nModule/periode ${moduleIndex + 1} van ${module.traject.modules.length}: ${module.title} (${module.weeks} weken)\n${module.description || ""}\nTrajectbrede leerdoelen:\n${goalText}\nExtra context: ${body.context || "geen"}`;
-  const result = await mistralJson<{ goals: GoalItem[] }>(
+  const result = await aiJson<{ goals: GoalItem[] }>(
     NL_SYSTEM,
     `Verdeel de onderstaande trajectbrede leerdoelen over deze periode van het traject. Kies de doelen die logisch in deze periode thuishoren (rekening houdend met de positie van de periode in het traject), en werk ze uit naar concrete, toetsbare leerdoelen en leeruitkomsten voor deze periode. Bepaal zelf een passende complexiteit: beginperiodes starten met lagere Bloom-niveaus (kennen/begrijpen/toepassen), latere periodes werken toe op hogere niveaus (analyseren/evalueren/creëren) en integratie van eerdere periodes. Maximaal 10 doelen.\n\n${input}\n\n` +
       `Antwoord als JSON: {"goals": [{"title": "...", "description": "...", "bloomLevel": "..."}]}`
@@ -215,7 +215,7 @@ async function generateLessonPlan(
     goals.map((g) => `- ${g.title}: ${g.description}${g.bloomLevel ? ` (Bloom: ${g.bloomLevel})` : ""}`).join("\n") ||
     "Geen leerdoelen gekoppeld.";
   const input = `Traject: ${lesson.traject.title} (vak: ${lesson.traject.subject})\nLes ${lesson.numberInModule} van ${lesson.module._count.lessons} in module "${lesson.module.title}", week ${lesson.week} van het traject, duur ${lesson.durationMin} minuten\nLeerdoelen:\n${goalText}\nExtra context: ${body.context || "geen"}`;
-  const result = await mistralJson<{
+  const result = await aiJson<{
     title: string;
     introduction: string;
     activities: string;
@@ -243,7 +243,7 @@ async function generateAssignments(
     lesson.goals.map((lg) => `- ${lg.learningGoal.title}: ${lg.learningGoal.description}`).join("\n") ||
     "Geen leerdoelen gekoppeld.";
   const input = `Les: ${lesson.title} (vak: ${lesson.traject.subject}, ${lesson.durationMin} min)\nLeerdoelen:\n${goalText}\nAantal opdrachten: ${body.count || 3}\nExtra context: ${body.context || "geen"}`;
-  const result = await mistralJson<{ assignments: { title: string; description: string; type: string }[] }>(
+  const result = await aiJson<{ assignments: { title: string; description: string; type: string }[] }>(
     NL_SYSTEM,
     `Maak praktische lesopdrachten (individueel, duo of groep) die bij de onderstaande les passen en de leerdoelen oefenen/toetsen. Beschrijf elke opdracht concreet en uitvoerbaar.\n\n${input}\n\n` +
       `Antwoord als JSON: {"assignments": [{"title": "...", "description": "...", "type": "individueel|duo|groep|huiswerk"}]}`
