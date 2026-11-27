@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ error: "Onbekend generatietype." }, { status: 400 });
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Log ook mislukte aanroepen, zodat het AI-log in Beheer laat zien of de
+      // provider correct wordt aangesproken.
+      await logGeneration(user.id, `error:${body.kind || "onbekend"}`, JSON.stringify(body).slice(0, 2000), `ERROR: ${msg}`).catch(() => undefined);
       if (e instanceof AiError) {
         return NextResponse.json({ error: e.message }, { status: e.status });
       }

@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import UserAdmin from "@/components/UserAdmin";
+import AiAdmin from "@/components/AiAdmin";
 
 export default async function BeheerPage() {
   await requireAdmin();
@@ -15,6 +16,7 @@ export default async function BeheerPage() {
         <h1 className="text-2xl font-bold">Beheer</h1>
         <p className="text-slate-500">Beheer docent-accounts voor deze omgeving.</p>
       </div>
+      <AiAdmin />
       <UserAdmin initialUsers={JSON.parse(JSON.stringify(users))} />
     </div>
   );
